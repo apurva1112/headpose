@@ -38,8 +38,8 @@ optional arguments:
 - If no `VIDEO` is provided, the script uses webcam by default.
 - If no `TRACKER` is provied, the script uses **KCF** by default. 
 - Available trackers in `OpenCV` 3.4+:
-<table><kbd>
+<table>
 <tr><td>Boosting</td><td>MIL</td><td>KCF</td><td>MedianFlow</td><td>MOSSE</td><td>CSRT</td><td>TLD</td></tr>
-</kbd></table>
+</table>
 
 - After the script runs, select the region on the frame, and it will start tracking and will show some statistics on the screen.
