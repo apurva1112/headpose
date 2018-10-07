@@ -40,7 +40,7 @@ class Tracker():
         The no. of frames after which to detect the object again and reset the
         bounding box. Ignored if a `detector` is not provided. Defaults to 40.
         Helps prevent the case wherein the tracker loses the object.
-        
+
         *Yet to be implemented
 
     -`tracker` : {'KCF','CSRT','MIL','Boosting','MedianFlow','TLD','MOSSE'},
@@ -232,14 +232,12 @@ class Tracker():
 
         """
 
-        # --TESTING-- #
         # Create the output window
         try:
             window = cv2.namedWindow(*self.window)
         except Exception as e:
             print('Couldn\'t create window.')
             raise(e)
-        # --TESTING-- #
 
         while True:
             self.frame = self.vs.read()  # Grab a frame from the video
@@ -286,8 +284,7 @@ class Tracker():
                         cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 0, 255), 2
                     )
 
-            # cv2.imshow(self.window, self.frame)
-            cv2.imshow(self.window[0], self.frame)  # --TESTING-- #
+            cv2.imshow(self.window[0], self.frame)
             key = cv2.waitKey(1) & 0xFF  # Get the keycode for pressed key
 
             # If 'S' is pressed, re-initialize the bounding box
@@ -326,6 +323,7 @@ class Tracker():
         cv2.destroyAllWindows()
 
 
+# For testing this module, simply run this script itself
 if __name__ == '__main__':
 
     # Please ensure the following files are present
