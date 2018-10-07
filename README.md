@@ -2,7 +2,7 @@
 Dataset Link : https://drive.google.com/file/d/0B7OEHD3T4eCkVGs0TkhUWFN6N1k/view?usp=sharing 
 
 ## Requirements 
-  Module                |   Version
+           Module         |   Version
   :----------------------:|:--------------:
   `scipy`                 |      1.1.0
   `numpy`                 |     1.14.3
@@ -15,7 +15,7 @@ Dataset Link : https://drive.google.com/file/d/0B7OEHD3T4eCkVGs0TkhUWFN6N1k/view
 Scripts written and tested in Python v3.6.5
 
 ## How to train
-* Open Training.ipyb 
+* Open `Training.ipynb` 
 * Change "DATASET_PATH" to path where dataset is kept
 * Run other cells to complete training
 
@@ -100,4 +100,5 @@ tracker = Tracker(
 # Start tracking
 tracker.start()
 ```
-
+### Testing
+The above mentioned example is provided in the `tracker.py` itself. Just run the script to see the results.
