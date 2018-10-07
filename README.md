@@ -2,7 +2,7 @@
 Dataset Link : https://drive.google.com/file/d/0B7OEHD3T4eCkVGs0TkhUWFN6N1k/view?usp=sharing 
 
 ## Requirements 
-           Module         |   Version
+Module         |   Version
   :----------------------:|:--------------:
   `scipy`                 |      1.1.0
   `numpy`                 |     1.14.3
