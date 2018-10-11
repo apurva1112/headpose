@@ -403,15 +403,15 @@ if __name__ == '__main__':
     # ./res10_300x300_ssd_iter_140000.caffemodel
 
     # A test example
-    tracker = Tracker()
-      #   detector=("./deploy.prototxt.txt",
-      #             "./res10_300x300_ssd_iter_140000.caffemodel"),
-      #   confidence=0.4,
-      #   tracker='kcf',
-      #   refresh_interval=0,
-      #   video=None,
-      #   width=400,
-      #   window=None
-      # )
+    tracker = Tracker(
+        detector=("./deploy.prototxt.txt",
+                  "./res10_300x300_ssd_iter_140000.caffemodel"),
+        confidence=0.4,
+        tracker='kcf',
+        refresh_interval=0,
+        video=None,
+        width=400,
+        window=None
+      )
 
     tracker.start()
