@@ -3,6 +3,7 @@ from imutils import resize
 import numpy as np
 import cv2
 import os
+import threading
 
 # TODO:
 # 1.Implement the function to automatically reset the
@@ -14,7 +15,7 @@ class Tracker():
     """
     Tracker(
         self, detector=None, confidence=0.4, tracker='KCF',
-        refresh_interval=40, video=None, width=400, window=None
+        refresh_interval=20, video=None, width=400, window=None
             )
 
     Creates a `Tracker` object, designed to automatically detect and
@@ -38,10 +39,9 @@ class Tracker():
 
     -`refresh_interval` : int, optional
         The no. of frames after which to detect the object again and reset the
-        bounding box. Ignored if a `detector` is not provided. Defaults to 40.
-        Helps prevent the case wherein the tracker loses the object.
-
-        *Yet to be implemented
+        bounding box. Defaults to 5. Ignored if a `detector` is not provided.
+        Helps the tracker maintain the correct bounding box.
+        Set equal to 0 to disable this feature.
 
     -`tracker` : {'KCF','CSRT','MIL','Boosting','MedianFlow','TLD','MOSSE'},
                 optional
@@ -71,22 +71,12 @@ class Tracker():
 
     def __init__(
         self, detector=None, confidence=0.4, tracker='KCF',
-        refresh_interval=40, video=None, width=400, window=None
+        refresh_interval=20, video=None, width=400, window=None
             ):
 
         # Initialize the tracker
-        if tracker.lower() == 'boosting':
-            self.tracker = cv2.TrackerBoosting_create()
-            print('Using Boosting tracker.')
-        elif tracker.lower() == 'medianflow':
-            self.tracker = cv2.TrackerMedianFlow_create()
-            print('Using MedianFlow tracker.')
-        else:
-            try:
-                self.tracker = eval(f'cv2.Tracker{tracker.upper()}_create()')
-                print(f'Using {tracker.upper()} tracker.')
-            except AttributeError:
-                raise Exception(f"'{tracker}' is not a valid tracker name.")
+        self.tracker_name = tracker
+        self.tracker = self._initialize_tracker(self.tracker_name)
 
         # Initialize the video stream
         if video is None:  # If no video file is provided
@@ -122,22 +112,53 @@ class Tracker():
             self.window = window
 
         # Initialize other attributes
-        self.initBB = None  # to store bounding box coordinates
+        self.initBB = None  # To store bounding box coordinates
+        self.updatedBB = None  # To refresh the bounding box
         self.fps = None  # Initialize fps (frames per second) count
         self.frame = None  # For storing the frame to be displayed
         self.frame_copy = None  # For storing the unmodified frame
         self.interval = refresh_interval  # The refresh interval
+        self.frame_count = 0  # Initialize the frame counter
 
         # Some less important attributes
-        self.tracker_name = tracker
         self.using_webcam = True if video is None else False
+        # To track if the update of bounding box is already underway
+        self.update_in_progress = False
         self.width = width  # The width to resize the frame to
 
-    def get_BB(self):
+    def _initialize_tracker(self, tracker_name, update=False):
         """
-        Tracker.get_BB(self)
+        Tracker._initialize_tracker(self, tracker_name, update=False)
 
-        Get the bounding box to be tracked.
+        Initializes and returns a new tracker instance. If `update`
+        is `True`, doesn't print out anything. Internal function.
+        """
+        if tracker_name.lower() == 'boosting':
+            if not update:  # Don't print for reinitialized trackers
+                print('Using Boosting tracker.')
+            return cv2.TrackerBoosting_create()
+
+        elif tracker_name.lower() == 'medianflow':
+            if not update:  # Don't print for reinitialized trackers
+                print('Using MedianFlow tracker.')
+            return cv2.TrackerMedianFlow_create()
+
+        else:
+            try:
+                tracker = eval(f'cv2.Tracker{tracker_name.upper()}_create()')
+                if not update:  # Don't print for reinitialized trackers
+                    print(f'Using {tracker_name.upper()} tracker.')
+                return tracker
+            except AttributeError:
+                raise Exception(f"'{tracker_name}' is not a valid tracker.")
+
+    def get_BB(self, update=False):
+        """
+        Tracker.get_BB(self, update=False)
+
+        Get the bounding box to be tracked. If `update` = `True`,
+        runs in a separate thread and only saves the new
+        bounding box coordinates (as the tracker is already in use).
         If a detector was provided earlier, gives the bounding box
         detected by the detector.
         Else, lets the user select a ROI by himself.
@@ -162,7 +183,7 @@ class Tracker():
                 # their confidences
                 # Therefore, the first element is the one we want
                 newBB = detections[0, 0, 0, :].squeeze()
-                newBB_confidence = newBB[2]
+                newBB_confidence = newBB[2]  # The confidence for newBB
 
                 # Compute (x, y) coordinates for the bounding box
                 box = newBB[3:7] * np.array([W, H, W, H])
@@ -175,20 +196,43 @@ class Tracker():
                 # Update the bounding box only if it has greater
                 # confidence than the self.confidence threshold
                 if newBB_confidence >= self.confidence:
-                    self.initBB = newBB
-                    # Finally, initialize the tracker
-                    self.tracker.init(self.frame, tuple(self.initBB))
+
+                    if update:  # If an update was requested
+                        self.updatedBB = newBB  # Store the updated box
+
+                        # Reset update parameters
+                        self.frame_count = 0
+                        self.update_in_progress = False
+
+                    else:
+                        self.initBB = newBB
+                        # Initialize the tracker
+                        self.tracker.init(self.frame, tuple(self.initBB))
                 else:
-                    pass
+                    if update:
+                        # Reset the parameters so that this function is called
+                        # again on the next iteration of the main loop.
+                        self.update_in_progress = False
+                        self.frame_count = self.interval - 1
 
             else:  # If nothing is detected
-                # Set self.initBB to None, so that this function
-                # will be called again and again till it finally
-                # detects the object
-                self.initBB = None
+                # Reset the relevant parameters so that this function is called
+                # again on the next iteration of the main loop.
 
-        else:  # If a detector is not provided
+                if update:  # If an update was requested
 
+                    self.update_in_progress = False
+                    # Set frame count to one less than the interval,
+                    # so that, it triggers this function on next iteration
+                    self.frame_count = self.interval - 1
+                else:
+
+                    # Set self.initBB to None, so that this function
+                    # will be called again on next iteration
+                    self.initBB = None
+
+        # If a detector is not provided, ignore updates
+        elif self.detector is None and not update:
             # Put some on-screen instructions to select the ROI
             info = [
                 ('ESC', 'Reselect region'),
@@ -204,10 +248,16 @@ class Tracker():
                 )
 
             # Select ROI and use as our bounding box
+            cv2.destroyWindow('Output')
             self.initBB = cv2.selectROI(self.window[0], self.frame,
                                         showCrosshair=False)
 
-            self.frame = self.frame_copy  # Clear the text on the frame
+            self.frame = self.frame_copy  # To clear the text on the frame
+
+            if update:  # If an update is requested
+                # Re-create the tracker
+                self.tracker = self._initialize_tracker(self.tracker_name,
+                                                        update=True)
 
             # Finally, initialize the tracker
             self.tracker.init(self.frame, tuple(self.initBB))
@@ -234,7 +284,7 @@ class Tracker():
 
         # Create the output window
         try:
-            window = cv2.namedWindow(*self.window)
+            cv2.namedWindow(*self.window)
         except Exception as e:
             print('Couldn\'t create window.')
             raise(e)
@@ -253,9 +303,20 @@ class Tracker():
                 print('Stream has ended, exiting...')
                 break
 
-            if self.initBB is None:  # The tracker is not initialized.
-                self.get_BB()  # Get the initial bounding box
+            if self.initBB is None:  # The bounding box is not initialized.
+                self.get_BB(update=False)  # Get the initial bounding box
                 self.fps = FPS().start()  # Start recording FPS
+
+            elif self.updatedBB is not None:  # If an updated box is available
+                self.initBB = self.updatedBB  # Get the updated box
+                self.updatedBB = None  # Reset the updatedBB
+                # Re-create the tracker
+                self.tracker = self._initialize_tracker(self.tracker_name,
+                                                        update=True)
+                # Initialize the tracker
+                self.tracker.init(self.frame, tuple(self.initBB))
+                # Restart the fps
+                self.fps = FPS().start()
 
             else:
                 # Get the updated bounding box from tracker
@@ -289,7 +350,7 @@ class Tracker():
 
             # If 'S' is pressed, re-initialize the bounding box
             if key == ord('s'):
-                self.get_BB()  # Get a new bounding box
+                self.get_BB(update=True)  # Get a new bounding box
                 self.fps = FPS().start()  # Restart the FPS counter
 
             elif (key == ord('q') or key == 27  # if 'Q' or 'ESC' is pressed,
@@ -300,6 +361,17 @@ class Tracker():
 
                 print('Exiting...')
                 break  # Stop the stream
+
+            # Make sure that an update is not already in progress
+            if not self.update_in_progress:
+                self.frame_count += 1  # Increment the frame counter
+
+            # Request a bounding box update if interval is reached.
+            if self.frame_count == self.interval:
+                t = threading.Thread(target=self.get_BB, args=(True,))
+                t.start()
+                self.update_in_progress = True
+                self.frame_count = 0  # Reset the frame counter
 
         self.stop()  # Release the resources and cleanup
 
@@ -331,14 +403,15 @@ if __name__ == '__main__':
     # ./res10_300x300_ssd_iter_140000.caffemodel
 
     # A test example
-    tracker = Tracker(
-        detector=("./deploy.prototxt.txt",
-                  "./res10_300x300_ssd_iter_140000.caffemodel"),
-        confidence=0.4,
-        tracker='kcf',
-        refresh_interval=40,
-        video=None,
-        width=400,
-        window=None
-      )
+    tracker = Tracker()
+      #   detector=("./deploy.prototxt.txt",
+      #             "./res10_300x300_ssd_iter_140000.caffemodel"),
+      #   confidence=0.4,
+      #   tracker='kcf',
+      #   refresh_interval=0,
+      #   video=None,
+      #   width=400,
+      #   window=None
+      # )
+
     tracker.start()
