@@ -6,20 +6,18 @@ import os
 import threading
 
 # TODO:
-# 1.Implement the function to automatically reset the
-#   bounding box for the detected object after a certain interval
-#   (in no. of frames, or preferrably, no. of seconds)
+# 1.Implement the support for running a function over the detections.
 
 
 class Tracker():
     """
     Tracker(
-        self, detector=None, confidence=0.4, tracker='KCF',
+        self, detector=None, confidence=0.4, tracker='KCF', func=None
         refresh_interval=20, video=None, width=400, window=None
             )
 
     Creates a `Tracker` object, designed to automatically detect and
-    subsequently track the motion of any single object.
+    subsequently track the motion of, any single object.
 
     Parameters
     ----------
@@ -47,6 +45,13 @@ class Tracker():
                 optional
         The name of the tracker to use. Defaults to KCF.
 
+    `func`: function, optional
+        A function that accepts a single argument, the cropped object found out
+        by the tracker. If provided, will be called whenever a succesful
+        detection is made.
+
+        *To be implemented
+
     `video` : str, optional
         If a valid video path is provided, uses the video for detecting
         and tracking the objecting. Otherwise, uses webcam.
@@ -70,7 +75,7 @@ class Tracker():
     """
 
     def __init__(
-        self, detector=None, confidence=0.4, tracker='KCF',
+        self, detector=None, confidence=0.4, tracker='KCF', func=None,
         refresh_interval=20, video=None, width=400, window=None
             ):
 
@@ -113,6 +118,7 @@ class Tracker():
             self.window = window
 
         # Initialize other attributes
+        self.func = func
         self.initBB = None  # To store bounding box coordinates
         self.updatedBB = None  # To refresh the bounding box
         self.fps = None  # Initialize fps (frames per second) count
@@ -277,6 +283,16 @@ class Tracker():
 
             # Finally, initialize the tracker
             self.tracker.init(self.frame, tuple(self.initBB))
+
+    def _run_func(self):
+        """
+        Tracker._run_func(self)
+
+        Runs the provided function (`func`) over the detected object.
+
+        *To be implemented
+        """
+        pass
 
     def start(self):
         """
