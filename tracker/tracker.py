@@ -92,6 +92,7 @@ class Tracker():
         if detector is not None:  # If a detector is provided
             try:
                 self.detector = cv2.dnn.readNetFromCaffe(*detector)
+                self.detector.setPreferableBackend(00000)
             except Exception as e:  # If the model fails to load
                 print(f"The detector couldn't be initialized.")
                 raise(e)
@@ -126,6 +127,12 @@ class Tracker():
         self.update_in_progress = False
         self.width = width  # The width to resize the frame to
 
+    def __del__(self):
+        """
+        Performs a cleanup. Wrapper for Tracker.stop()
+        """
+        self.stop()
+
     def _initialize_tracker(self, tracker_name, update=False):
         """
         Tracker._initialize_tracker(self, tracker_name, update=False)
@@ -152,9 +159,9 @@ class Tracker():
             except AttributeError:
                 raise Exception(f"'{tracker_name}' is not a valid tracker.")
 
-    def get_BB(self, update=False):
+    def _get_BB(self, update=False):
         """
-        Tracker.get_BB(self, update=False)
+        Tracker._get_BB(self, update=False)
 
         Get the bounding box to be tracked. If `update` = `True`,
         runs in a separate thread and only saves the new
@@ -167,7 +174,6 @@ class Tracker():
         H, W = self.frame.shape[:2]  # Grab the shape of the frame
 
         if self.detector is not None:  # If a detector is provided
-
             # Preprocess frame to pass through the detector and create a blob
             blob = cv2.dnn.blobFromImage(
                 cv2.resize(self.frame_copy, (300, 300)), 1.,
@@ -175,8 +181,16 @@ class Tracker():
                 )
             self.detector.setInput(blob)  # Set the input image for detector
 
-            # Get the detections.
-            detections = self.detector.forward()
+            # Workaround for a cv2 error
+            try:
+                # Get the detections.
+                detections = self.detector.forward()
+            except cv2.error:
+                print('error')
+                # Reset the parameters and return
+                self.update_in_progress = False
+                self.frame_count = self.interval - 1
+                return
 
             if detections is not None:  # If anything is detected at all
                 # The returned detections are sorted according to
@@ -203,33 +217,35 @@ class Tracker():
                         # Reset update parameters
                         self.frame_count = 0
                         self.update_in_progress = False
+                        return
 
                     else:
                         self.initBB = newBB
                         # Initialize the tracker
                         self.tracker.init(self.frame, tuple(self.initBB))
+                        return
                 else:
                     if update:
                         # Reset the parameters so that this function is called
                         # again on the next iteration of the main loop.
                         self.update_in_progress = False
                         self.frame_count = self.interval - 1
+                        return
 
             else:  # If nothing is detected
                 # Reset the relevant parameters so that this function is called
                 # again on the next iteration of the main loop.
-
                 if update:  # If an update was requested
-
                     self.update_in_progress = False
                     # Set frame count to one less than the interval,
                     # so that, it triggers this function on next iteration
                     self.frame_count = self.interval - 1
+                    return
                 else:
-
                     # Set self.initBB to None, so that this function
                     # will be called again on next iteration
                     self.initBB = None
+                    return
 
         # If a detector is not provided, ignore updates
         elif self.detector is None and not update:
@@ -290,6 +306,9 @@ class Tracker():
             raise(e)
 
         while True:
+            # print(self.frame_count)  # DEBUG
+            # print('Running threads: ', threading.active_count())  # DEBUG
+
             self.frame = self.vs.read()  # Grab a frame from the video
             self.frame = \
                 self.frame[1] if not self.using_webcam else self.frame
@@ -304,7 +323,7 @@ class Tracker():
                 break
 
             if self.initBB is None:  # The bounding box is not initialized.
-                self.get_BB(update=False)  # Get the initial bounding box
+                self._get_BB(update=False)  # Get the initial bounding box
                 self.fps = FPS().start()  # Start recording FPS
 
             elif self.updatedBB is not None:  # If an updated box is available
@@ -350,7 +369,7 @@ class Tracker():
 
             # If 'S' is pressed, re-initialize the bounding box
             if key == ord('s'):
-                self.get_BB(update=True)  # Get a new bounding box
+                self._get_BB(update=True)  # Get a new bounding box
                 self.fps = FPS().start()  # Restart the FPS counter
 
             elif (key == ord('q') or key == 27  # if 'Q' or 'ESC' is pressed,
@@ -368,10 +387,10 @@ class Tracker():
 
             # Request a bounding box update if interval is reached.
             if self.frame_count == self.interval:
-                t = threading.Thread(target=self.get_BB, args=(True,))
-                t.start()
                 self.update_in_progress = True
                 self.frame_count = 0  # Reset the frame counter
+                t = threading.Thread(target=self._get_BB, args=(True,))
+                t.start()
 
         self.stop()  # Release the resources and cleanup
 
@@ -404,11 +423,11 @@ if __name__ == '__main__':
 
     # A test example
     tracker = Tracker(
-        detector=("./deploy.prototxt.txt",
-                  "./res10_300x300_ssd_iter_140000.caffemodel"),
+        detector=("../deploy.prototxt.txt",
+                  "../res10_300x300_ssd_iter_140000.caffemodel"),
         confidence=0.4,
         tracker='kcf',
-        refresh_interval=0,
+        refresh_interval=5,
         video=None,
         width=400,
         window=None
